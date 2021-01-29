@@ -872,6 +872,9 @@ def setToMemc(logErr_inst, inputExchange, inputSegment, roundoff, tempDirectoryP
 					logErr_inst.LogError(None, "%s Line:%s. Excepton adding OHLCV to RT token. Except:%s"%(fyCmnDef.ERROR_setToMemc, exc_tb.tb_lineno, str(e)), printFlag)
 				cacheQueue.put({memcToken_RT:memcValDict}) ## Commented for testing 2018-01-16
 
+				if nocache == False:
+					cacheConn.set(memcTVKey, json.dumps(inputDict[eachToken]), ex=86400)
+
 				if noSend == False:
 					##Code for streaming server - 20181031 Palash
 					sendDict = memcValDict.copy()
@@ -1013,7 +1016,8 @@ def setOiToThread(logErr_inst, inputExchange, inputSegment, roundoff, tempDirect
 				tokenMinDict = inputDict[eachToken]
 			else:
 				## If we restart the program in between this will help
-				fileName 	= tempDirectoryPath + str(memcToken_RT) + ".json"
+				# fileName 	= tempDirectoryPath + str(memcToken_RT) + ".json"
+				fileName 	= tempDirectoryPath + str(memcTVKey) + ".json"
 				## Get the data from file system
 				# print("fileName in fy_util-> ",fileName)
 				# ('fileName in fy_util-> ', '/home/ec2-user/fy_var/temp_nse_init/CD/20210125/10122112292168-2005-1608508800.json')
@@ -1027,7 +1031,7 @@ def setOiToThread(logErr_inst, inputExchange, inputSegment, roundoff, tempDirect
 								# ('fileDataTV-->1042 ', '{"fp": 2700000, "201": 1608528419, "202": 7202, "ft": "10122112292168-2005-1608508800", "fv": 20, "dhi": 107449, "dlo": 95776, "43": 1, "34": 2, "oi": 107244}')
 								#sys.exit() ## For testing comment it in ** LIVE **
 
-								retPrevVal = getPrevMinVal(None, fileDataTV, memcToken_RT, printFlag = printFlag)
+								retPrevVal = getPrevMinVal(None, fileDataTV, memcTVKey, printFlag = printFlag)
 								# print("retPrevVal--> ", retPrevVal)
 								# ('retPrevVal--> ', {100: 1, 101: '', 102: {'fp': 4975000, 'ft': '10122112292166-2005-1608508800', 'fv': 100, 'oi': 17837, 'dhi': 17837, 'dlo': 17249}})
 
@@ -1052,10 +1056,10 @@ def setOiToThread(logErr_inst, inputExchange, inputSegment, roundoff, tempDirect
 					## This will happen only when there in no data in program memory and no data in file system. This will try to get the data from the cache system.
 					if nocache == False: ## Only is it is specified 
 						try:
-							cacheVal = cacheConn.get(memcToken_RT)
+							cacheVal = cacheConn.get(memcTVKey)
 							if cacheVal != None:
 								## sys.exit() ## This is for testing comment it in ** LIVE **
-								retPrevVal = getPrevMinVal(None, cacheVal, memcToken_RT, printFlag = printFlag)
+								retPrevVal = getPrevMinVal(None, cacheVal, memcTVKey, printFlag = printFlag)
 								if retPrevVal[fyCmnDef.K_FUNCT_STAT] != fyCmnDef.V_FUNCT_SUCCESS_1:
 									tokenMinDict = {}
 									logErr_inst.LogError(None, "%s Getting from cached failed. Error:%s"%(fyCmnDef.ERROR_setOiToThread, retPrevVal[fyCmnDef.K_ERR_MSG]), printFlag)
@@ -1093,7 +1097,8 @@ def setOiToThread(logErr_inst, inputExchange, inputSegment, roundoff, tempDirect
 					if debugFlag == fyCmnDef.DEBUG_TIME:
 						print "1.6:",time.time() - pointA
 
-					tokenMinDict[fyMemC.K_MEMC_OI_TOKEN] 	= memcToken_RT
+					# tokenMinDict[fyMemC.K_MEMC_OI_TOKEN] 	= memcToken_RT
+					tokenMinDict[fyMemC.K_MEMC_OI_TOKEN] 	= memcTVKey
 					tokenMinDict[fyMemC.K_MEMC_OI_FILLP] 	= inputDict[eachToken][fyMemC.K_MEMC_OI_FILLP]
 					tokenMinDict[fyMemC.K_MEMC_OI_FILLVOL] 	= inputDict[eachToken][fyMemC.K_MEMC_OI_FILLVOL]
 					tokenMinDict[fyMemC.K_MEMC_OI] 			= inputDict[eachToken][fyMemC.K_MEMC_OI]
@@ -1123,7 +1128,7 @@ def setOiToThread(logErr_inst, inputExchange, inputSegment, roundoff, tempDirect
 			else:
 				## First tick of the day # print "new day val"
 				tokenMinDict =  {
-									tokenMinDict[fyMemC.K_MEMC_OI_TOKEN] 	: inputDict[eachToken][fyCmnDef.K_TOKEN_OI],
+									tokenMinDict[fyMemC.K_MEMC_OI_TOKEN] 	: memcTVKey,
 									tokenMinDict[fyMemC.K_MEMC_OI_FILLP] 	: inputDict[eachToken][fyCmnDef.K_FILLP_OI],
 									tokenMinDict[fyMemC.K_MEMC_OI_FILLVOL] 	: inputDict[eachToken][fyCmnDef.K_FILLVOL_OI],
 									tokenMinDict[fyMemC.K_MEMC_OI] 			: inputDict[eachToken][fyCmnDef.K_OI],
@@ -1175,7 +1180,6 @@ def setOiToThread(logErr_inst, inputExchange, inputSegment, roundoff, tempDirect
 								try:
 									if not isinstance(prevMemcVal,dict):
 										prevMemcVal = json.loads(prevMemcVal)
-									inputDict[eachToken][fyCmnDef.K_OI_CLOSING_P] = prevMemcVal[str(fyMemC.K_MEMC_Change_OI)]
 								except Exception,e:
 									exc_type, exc_obj, exc_tb = sys.exc_info()
 									errMsg = "%s Line:%s. After market JSON load failed for:%s . Except:%s"%(fyCmnDef.ERROR_setOiToThread, exc_tb.tb_lineno, memcToken_RT, str(e))
@@ -1200,7 +1204,7 @@ def setOiToThread(logErr_inst, inputExchange, inputSegment, roundoff, tempDirect
 					if inputDict[eachToken][fyMemC.K_MEMC_OI_Prev]:
 						memcValDict[fyMemC.K_MEMC_Change_OI] = round(float(inputDict[eachToken][fyMemC.K_MEMC_OI]) - float(inputDict[eachToken][fyMemC.K_MEMC_OI_Prev]), roundoff)
 
-					memcValDict[fyMemC.K_OI_RT_TOKEN] 	 = inputDict[eachToken][fyMemC.K_MEMC_OI_TOKEN]
+					#memcValDict[fyMemC.K_OI_RT_TOKEN] 	 = inputDict[eachToken][fyMemC.K_MEMC_OI_TOKEN]
 					memcValDict[fyMemC.K_OI_RT_FILLP] 	 = inputDict[eachToken][fyMemC.K_MEMC_OI_FILLP]
 					memcValDict[fyMemC.K_OI_RT_FILLVOL]  = inputDict[eachToken][fyMemC.K_MEMC_OI_FILLVOL]
 					memcValDict[fyMemC.K_OI_RT_OI] 		 = inputDict[eachToken][fyMemC.K_MEMC_OI]
@@ -1217,7 +1221,7 @@ def setOiToThread(logErr_inst, inputExchange, inputSegment, roundoff, tempDirect
 				# print("memcValDict--> ", memcValDict)
 				# ('memcValDict--> ', {34: 2, 201: 1608528689, 810: '10122101275521-2005-1608508800', 811: 7400000, 812: 23, 813: 31469, 814: 31469, 815: 29937, 816: -331646.0})
 				if nocache == False:
-					cacheConn.set(memcToken_RT , json.dumps(inputDict[eachToken]), ex=86400)
+					cacheConn.set(memcTVKey, json.dumps(inputDict[eachToken]), ex=86400)
 
 				if noSend == False:
 					##Code for streaming server 
@@ -1227,7 +1231,7 @@ def setOiToThread(logErr_inst, inputExchange, inputSegment, roundoff, tempDirect
 					sendDict['tradeStat']				= SetGlobalVars.global_minSetFlag
 
 					sendPktQ.put({eachToken:sendDict})
-					print("sendDict--> ", sendDict)
+					# print("sendDict--> ", sendDict)
 					# ('sendDict--> ', {34: 2, 227: 7202, 226: 1608528392, 201: 1608528392, 810: '10122112292169-2005-1608508800', 811: 350000, 812: 15, 813: 129683, 814: 132555, 815: 109869, 816: 129683.0, 'tradeStat': 7})
 				if debugFlag == fyCmnDef.DEBUG_TIME:
 					print "1.16:",time.time() - pointA
